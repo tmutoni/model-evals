@@ -1,7 +1,9 @@
+//removed info from licide-react import list
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +17,22 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetClose } from "@/components/ui/sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetFooter,
+  SheetClose,
+} from "@/components/ui/sheet";
+
 import {
   ShieldBan,
   CheckCircle2,
@@ -26,11 +42,11 @@ import {
   DollarSign,
   Filter as FilterIcon,
   ArrowUpRight,
-  Info,
   Search,
   Settings2,
   Upload,
 } from "lucide-react";
+
 import {
   ResponsiveContainer,
   LineChart,
@@ -47,9 +63,9 @@ import {
   Cell,
 } from "recharts";
 
-// ------------------------------------------------------------
-// Types
-// ------------------------------------------------------------
+/* =========================
+   Types
+   ========================= */
 export type EnforcementRow = {
   id: number | string;
   ts: string; // ISO time
@@ -86,9 +102,9 @@ export type Filters = {
   confidence: [number, number];
 };
 
-// ------------------------------------------------------------
-// Sample demo data — replace via uploader or API
-// ------------------------------------------------------------
+/* =========================
+   Sample data (replace via upload/API)
+   ========================= */
 const SAMPLE: EnforcementRow[] = [
   { id: 1, ts: "2025-08-07T15:10:00Z", policy_category: "NONVIOLENT_WRONGDOING", confidence: 0.97, decision: "block", rationale: "arson & insurance fraud request", slice: "EN", language: "en", latencyMs: 180, costCents: 90, user_response: "none", appeal_outcome: "none" },
   { id: 2, ts: "2025-08-07T16:22:00Z", policy_category: "HATE_SPEECH", confidence: 0.82, decision: "block", rationale: "protected class slur", slice: "EN", language: "en", latencyMs: 220, costCents: 80, user_response: "dispute", appeal_outcome: "upheld" },
@@ -116,9 +132,9 @@ const DEFAULT_CONFIG: DashboardConfig = {
   presetName: "balanced",
 };
 
-// ------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------
+/* =========================
+   Helpers
+   ========================= */
 function formatPct(n: number) {
   return `${(n * 100).toFixed(1)}%`;
 }
@@ -166,11 +182,10 @@ function aggregateKpis(rows: EnforcementRow[]) {
   const p95Latency = p95(rows.map((r) => r.latencyMs));
   const avgCost = rows.length ? rows.reduce((a, r) => a + r.costCents, 0) / rows.length / 100 : 0;
 
-  // Worst-slice block-rate disparity across groupings
   const bySlice: Record<string, { total: number; blocks: number }> = {};
   rows.forEach((r) => {
     const key = r.slice || r.language;
-    bySlice[key] ||= { total: 0, blocks: 0 };
+    if (!bySlice[key]) bySlice[key] = { total: 0, blocks: 0 };
     bySlice[key].total += 1;
     bySlice[key].blocks += r.decision === "block" ? 1 : 0;
   });
@@ -195,8 +210,10 @@ function timeSeries(rows: EnforcementRow[]) {
   const map: Record<string, { date: string; block: number; suggest: number; allow: number }> = {};
   rows.forEach((r) => {
     const d = dateOnly(r.ts);
-    map[d] ||= { date: d, block: 0, suggest: 0, allow: 0 };
-    (map[d] as any)[r.decision] += 1;
+    if (!map[d]) map[d] = { date: d, block: 0, suggest: 0, allow: 0 };
+    if (r.decision === "block") map[d].block += 1;
+    else if (r.decision === "suggest") map[d].suggest += 1;
+    else map[d].allow += 1;
   });
   return Object.values(map).sort((a, b) => (a.date < b.date ? -1 : 1));
 }
@@ -204,15 +221,17 @@ function timeSeries(rows: EnforcementRow[]) {
 function byCategory(rows: EnforcementRow[]) {
   const map: Record<string, { category: string; count: number }> = {};
   rows.forEach((r) => {
-    map[r.policy_category] ||= { category: r.policy_category, count: 0 };
+    if (!map[r.policy_category]) map[r.policy_category] = { category: r.policy_category, count: 0 };
     map[r.policy_category].count += 1;
   });
   return Object.values(map).sort((a, b) => b.count - a.count);
 }
 
 function decisionBands(rows: EnforcementRow[]) {
-  const map: Record<string, number> = { block: 0, suggest: 0, allow: 0 };
-  rows.forEach((r) => (map[r.decision] += 1));
+  const map: Record<"block" | "suggest" | "allow", number> = { block: 0, suggest: 0, allow: 0 };
+  rows.forEach((r) => {
+    map[r.decision] += 1;
+  });
   return [
     { name: "Block", value: map.block },
     { name: "Suggest", value: map.suggest },
@@ -234,9 +253,9 @@ function disparityBars(rows: EnforcementRow[]) {
 
 const COLORS = ["#82ca9d", "#8884d8", "#ffc658", "#ff7f50", "#8dd1e1", "#a4de6c"];
 
-// ------------------------------------------------------------
-// Page Component
-// ------------------------------------------------------------
+/* =========================
+   Page
+   ========================= */
 export default function Page() {
   const params = useSearchParams();
   const [filters, setFilters] = useState<Filters>({
@@ -251,7 +270,7 @@ export default function Page() {
   const [cfg, setCfg] = useState<DashboardConfig>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("policy_dash_config");
-      if (saved) return JSON.parse(saved);
+      if (saved) return JSON.parse(saved) as DashboardConfig;
     }
     return DEFAULT_CONFIG;
   });
@@ -281,16 +300,27 @@ export default function Page() {
   const bands = useMemo(() => decisionBands(filtered), [filtered]);
   const disparity = useMemo(() => disparityBars(filtered), [filtered]);
 
-  // Release gate pass/fail based on current config
   const gates = useMemo(() => {
-    const A = kpis.blockRate >= cfg.gates.A.blockRateMin && kpis.worstDisparity <= cfg.gates.A.worstSliceGapMax && kpis.p95Latency <= cfg.gates.A.latencyP95Max;
-    const B = kpis.overRefusalRate <= cfg.gates.B.overRefusalMax && kpis.appealsUpheldRate >= cfg.gates.B.appealsUpheldMin;
+    const A =
+      kpis.blockRate >= cfg.gates.A.blockRateMin &&
+      kpis.worstDisparity <= cfg.gates.A.worstSliceGapMax &&
+      kpis.p95Latency <= cfg.gates.A.latencyP95Max;
+    const B =
+      kpis.overRefusalRate <= cfg.gates.B.overRefusalMax &&
+      kpis.appealsUpheldRate >= cfg.gates.B.appealsUpheldMin;
     const C = kpis.avgCost <= cfg.gates.C.avgCostMax && kpis.total >= cfg.gates.C.minVolume;
     return { A, B, C };
   }, [kpis, cfg]);
 
   function handleResetFilters() {
-    setFilters({ start: "2025-08-07", end: "2025-08-11", category: "all", band: "all", language: "all", confidence: [0.5, 1.0] });
+    setFilters({
+      start: "2025-08-07",
+      end: "2025-08-11",
+      category: "all",
+      band: "all",
+      language: "all",
+      confidence: [0.5, 1.0],
+    });
   }
 
   function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -300,22 +330,37 @@ export default function Page() {
     reader.onload = () => {
       try {
         const text = String(reader.result);
+
         if (file.name.endsWith(".json")) {
           const parsed = JSON.parse(text) as EnforcementRow[];
           setRows(parsed);
           return;
         }
-        // Simple CSV parser expecting headers matching EnforcementRow keys
+
+        // CSV parse (expects headers matching EnforcementRow keys)
         const lines = text.split(/\r?\n/).filter(Boolean);
+        if (!lines.length) return;
+
         const headers = lines[0].split(",").map((h) => h.trim());
+        const idx = (h: keyof EnforcementRow) => headers.indexOf(h as string);
+
         const data: EnforcementRow[] = lines.slice(1).map((line, i) => {
           const cells = line.split(",");
-          const obj: any = { id: i + 1 };
-          headers.forEach((h, idx) => (obj[h] = cells[idx]));
-          obj.confidence = parseFloat(obj.confidence);
-          obj.latencyMs = parseInt(obj.latencyMs, 10);
-          obj.costCents = parseInt(obj.costCents, 10);
-          return obj as EnforcementRow;
+          const rec: EnforcementRow = {
+            id: cells[idx("id")] ?? String(i + 1),
+            ts: cells[idx("ts")],
+            policy_category: cells[idx("policy_category")],
+            confidence: parseFloat(cells[idx("confidence")]),
+            decision: cells[idx("decision")] as EnforcementRow["decision"],
+            rationale: cells[idx("rationale")],
+            slice: cells[idx("slice")],
+            language: cells[idx("language")],
+            latencyMs: parseInt(cells[idx("latencyMs")], 10) || 0,
+            costCents: parseInt(cells[idx("costCents")], 10) || 0,
+            user_response: (cells[idx("user_response")] || "none") as EnforcementRow["user_response"],
+            appeal_outcome: (cells[idx("appeal_outcome")] || "none") as EnforcementRow["appeal_outcome"],
+          };
+          return rec;
         });
         setRows(data);
       } catch (err) {
@@ -326,11 +371,22 @@ export default function Page() {
   }
 
   function exportCsv() {
-    const headers = [
-      "id","ts","policy_category","confidence","decision","rationale","slice","language","latencyMs","costCents","user_response","appeal_outcome",
+    const headers: (keyof EnforcementRow)[] = [
+      "id",
+      "ts",
+      "policy_category",
+      "confidence",
+      "decision",
+      "rationale",
+      "slice",
+      "language",
+      "latencyMs",
+      "costCents",
+      "user_response",
+      "appeal_outcome",
     ];
     const body = filtered
-      .map((r) => headers.map((h) => String((r as any)[h] ?? "")).join(","))
+      .map((r) => headers.map((h) => String(r[h] ?? "")).join(","))
       .join("\n");
     const csv = headers.join(",") + "\n" + body;
     const blob = new Blob([csv], { type: "text/csv" });
@@ -346,29 +402,45 @@ export default function Page() {
     <div className="p-6 space-y-6">
       <header className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">DiCorner • Policy‑Aware Refusal Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">Tweak NSMs, release gates, and automation bands in real‑time. Upload CSV/JSON or point to a config URL for quick meeting demos.</p>
+          <h1 className="text-2xl font-semibold tracking-tight">DiCorner • Policy-Aware Refusal Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
+            Tweak NSMs, release gates, and automation bands in real-time. Upload CSV/JSON or point to a config URL for quick meeting demos.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Sheet>
             <SheetTrigger asChild>
-              <Button variant="secondary" className="rounded-2xl"><Settings2 className="h-4 w-4 mr-2"/>Config</Button>
+              <Button variant="secondary" className="rounded-2xl">
+                <Settings2 className="h-4 w-4 mr-2" />
+                Config
+              </Button>
             </SheetTrigger>
             <SheetContent className="w-[420px] sm:w-[520px]">
               <SheetHeader>
                 <SheetTitle>Dashboard Config</SheetTitle>
               </SheetHeader>
+
               <div className="mt-4 space-y-6 text-sm">
                 <section className="space-y-2">
-                  <h3 className="font-medium">North‑Star Targets</h3>
+                  <h3 className="font-medium">North-Star Targets</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label>Block rate ≤</Label>
-                      <Input type="number" step="0.01" value={cfg.nsm.blockRateMax} onChange={(e) => setCfg({ ...cfg, nsm: { ...cfg.nsm, blockRateMax: Number(e.target.value) } })} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={cfg.nsm.blockRateMax}
+                        onChange={(e) => setCfg({ ...cfg, nsm: { ...cfg.nsm, blockRateMax: Number(e.target.value) } })}
+                      />
                     </div>
                     <div>
-                      <Label>Worst‑slice gap ≤</Label>
-                      <Input type="number" step="0.01" value={cfg.nsm.worstSliceGapMax} onChange={(e) => setCfg({ ...cfg, nsm: { ...cfg.nsm, worstSliceGapMax: Number(e.target.value) } })} />
+                      <Label>Worst-slice gap ≤</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={cfg.nsm.worstSliceGapMax}
+                        onChange={(e) => setCfg({ ...cfg, nsm: { ...cfg.nsm, worstSliceGapMax: Number(e.target.value) } })}
+                      />
                     </div>
                   </div>
                 </section>
@@ -379,35 +451,82 @@ export default function Page() {
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <Label>Gate A • Block ≥</Label>
-                        <Input type="number" step="0.01" value={cfg.gates.A.blockRateMin} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, A: { ...cfg.gates.A, blockRateMin: Number(e.target.value) } } })} />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={cfg.gates.A.blockRateMin}
+                          onChange={(e) =>
+                            setCfg({ ...cfg, gates: { ...cfg.gates, A: { ...cfg.gates.A, blockRateMin: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                       <div>
                         <Label>Gate A • P95 ≤ (ms)</Label>
-                        <Input type="number" value={cfg.gates.A.latencyP95Max} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, A: { ...cfg.gates.A, latencyP95Max: Number(e.target.value) } } })} />
+                        <Input
+                          type="number"
+                          value={cfg.gates.A.latencyP95Max}
+                          onChange={(e) =>
+                            setCfg({ ...cfg, gates: { ...cfg.gates, A: { ...cfg.gates.A, latencyP95Max: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                       <div>
                         <Label>Gate A • Gap ≤</Label>
-                        <Input type="number" step="0.01" value={cfg.gates.A.worstSliceGapMax} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, A: { ...cfg.gates.A, worstSliceGapMax: Number(e.target.value) } } })} />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={cfg.gates.A.worstSliceGapMax}
+                          onChange={(e) =>
+                            setCfg({ ...cfg, gates: { ...cfg.gates, A: { ...cfg.gates.A, worstSliceGapMax: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <Label>Gate B • Over‑refusal ≤</Label>
-                        <Input type="number" step="0.01" value={cfg.gates.B.overRefusalMax} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, B: { ...cfg.gates.B, overRefusalMax: Number(e.target.value) } } })} />
+                        <Label>Gate B • Over-refusal ≤</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={cfg.gates.B.overRefusalMax}
+                          onChange={(e) =>
+                          setCfg({ ...cfg, gates: { ...cfg.gates, B: { ...cfg.gates.B, overRefusalMax: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                       <div>
                         <Label>Gate B • Appeals upheld ≥</Label>
-                        <Input type="number" step="0.01" value={cfg.gates.B.appealsUpheldMin} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, B: { ...cfg.gates.B, appealsUpheldMin: Number(e.target.value) } } })} />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={cfg.gates.B.appealsUpheldMin}
+                          onChange={(e) =>
+                          setCfg({ ...cfg, gates: { ...cfg.gates, B: { ...cfg.gates.B, appealsUpheldMin: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <Label>Gate C • Avg cost ≤ ($)</Label>
-                        <Input type="number" step="0.01" value={cfg.gates.C.avgCostMax} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, C: { ...cfg.gates.C, avgCostMax: Number(e.target.value) } } })} />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={cfg.gates.C.avgCostMax}
+                          onChange={(e) =>
+                            setCfg({ ...cfg, gates: { ...cfg.gates, C: { ...cfg.gates.C, avgCostMax: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                       <div>
                         <Label>Gate C • Min volume ≥</Label>
-                        <Input type="number" value={cfg.gates.C.minVolume} onChange={(e) => setCfg({ ...cfg, gates: { ...cfg.gates, C: { ...cfg.gates.C, minVolume: Number(e.target.value) } } })} />
+                        <Input
+                          type="number"
+                          value={cfg.gates.C.minVolume}
+                          onChange={(e) =>
+                            setCfg({ ...cfg, gates: { ...cfg.gates, C: { ...cfg.gates.C, minVolume: Number(e.target.value) } } })
+                          }
+                        />
                       </div>
                     </div>
                   </div>
@@ -417,20 +536,32 @@ export default function Page() {
                   <h3 className="font-medium">Automation Bands</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <Label>High (auto‑block) ≥</Label>
-                      <Input type="number" step="0.01" value={cfg.bands.high} onChange={(e) => setCfg({ ...cfg, bands: { ...cfg.bands, high: Number(e.target.value) } })} />
+                      <Label>High (auto-block) ≥</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={cfg.bands.high}
+                        onChange={(e) => setCfg({ ...cfg, bands: { ...cfg.bands, high: Number(e.target.value) } })}
+                      />
                     </div>
                     <div>
                       <Label>Medium (suggest) ≥</Label>
-                      <Input type="number" step="0.01" value={cfg.bands.medium} onChange={(e) => setCfg({ ...cfg, bands: { ...cfg.bands, medium: Number(e.target.value) } })} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={cfg.bands.medium}
+                        onChange={(e) => setCfg({ ...cfg, bands: { ...cfg.bands, medium: Number(e.target.value) } })}
+                      />
                     </div>
                   </div>
                 </section>
 
                 <section className="space-y-2">
                   <h3 className="font-medium">Slices</h3>
-                  <Select value={cfg.sliceDim} onValueChange={(v: any) => setCfg({ ...cfg, sliceDim: v })}>
-                    <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+                  <Select value={cfg.sliceDim} onValueChange={(v: "language" | "slice") => setCfg({ ...cfg, sliceDim: v })}>
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="language">Language</SelectItem>
                       <SelectItem value="slice">Custom slice</SelectItem>
@@ -448,7 +579,9 @@ export default function Page() {
                     Save to browser
                   </Button>
                   <SheetClose asChild>
-                    <Button variant="outline" className="rounded-2xl">Close</Button>
+                    <Button variant="outline" className="rounded-2xl">
+                      Close
+                    </Button>
                   </SheetClose>
                 </SheetFooter>
               </div>
@@ -457,7 +590,10 @@ export default function Page() {
 
           <label className="inline-flex items-center gap-2 cursor-pointer">
             <input type="file" accept=".csv,.json" className="hidden" onChange={handleUpload} />
-            <Button variant="secondary" className="rounded-2xl"><Upload className="h-4 w-4 mr-2"/>Data</Button>
+            <Button variant="secondary" className="rounded-2xl">
+              <Upload className="h-4 w-4 mr-2" />
+              Data
+            </Button>
           </label>
         </div>
       </header>
@@ -478,13 +614,15 @@ export default function Page() {
           </div>
           <div className="space-y-2">
             <Label>Policy category</Label>
-            <Select value={filters.category} onValueChange={(v) => setFilters((f) => ({ ...f, category: v }))}>
-              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+            <Select value={filters.category} onValueChange={(v: string) => setFilters((f) => ({ ...f, category: v }))}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
-                <SelectItem value="NONVIOLENT_WRONGDOING">Non‑violent wrongdoing</SelectItem>
+                <SelectItem value="NONVIOLENT_WRONGDOING">Non-violent wrongdoing</SelectItem>
                 <SelectItem value="HATE_SPEECH">Hate speech</SelectItem>
-                <SelectItem value="SELF_HARM">Self‑harm</SelectItem>
+                <SelectItem value="SELF_HARM">Self-harm</SelectItem>
                 <SelectItem value="VIOLENT_HARM">Violent harm</SelectItem>
                 <SelectItem value="SEXUAL_CONTENT">Sexual content</SelectItem>
               </SelectContent>
@@ -492,8 +630,10 @@ export default function Page() {
           </div>
           <div className="space-y-2">
             <Label>Decision band</Label>
-            <Select value={filters.band} onValueChange={(v: any) => setFilters((f) => ({ ...f, band: v }))}>
-              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+            <Select value={filters.band} onValueChange={(v: Filters["band"]) => setFilters((f) => ({ ...f, band: v }))}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="block">Block</SelectItem>
@@ -504,8 +644,10 @@ export default function Page() {
           </div>
           <div className="space-y-2">
             <Label>Language</Label>
-            <Select value={filters.language} onValueChange={(v) => setFilters((f) => ({ ...f, language: v }))}>
-              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+            <Select value={filters.language} onValueChange={(v: string) => setFilters((f) => ({ ...f, language: v }))}>
+              <SelectTrigger className="rounded-xl">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All</SelectItem>
                 <SelectItem value="en">English</SelectItem>
@@ -522,14 +664,24 @@ export default function Page() {
                 min={0}
                 max={100}
                 step={1}
-                onValueChange={([min, max]) => setFilters((f) => ({ ...f, confidence: [min / 100, max / 100] }))}
+                onValueChange={([min, max]: number[]) =>
+                  setFilters((f) => ({ ...f, confidence: [min / 100, max / 100] }))
+                }
               />
-              <span className="text-sm text-muted-foreground w-28">{filters.confidence[0].toFixed(2)}–{filters.confidence[1].toFixed(2)}</span>
+              <span className="text-sm text-muted-foreground w-28">
+                {filters.confidence[0].toFixed(2)}–{filters.confidence[1].toFixed(2)}
+              </span>
             </div>
           </div>
           <div className="md:col-span-5 flex items-center gap-2">
-            <Button className="rounded-2xl" onClick={handleResetFilters}><FilterIcon className="h-4 w-4 mr-2"/>Reset</Button>
-            <Button className="rounded-2xl" variant="outline" onClick={exportCsv}><ArrowUpRight className="h-4 w-4 mr-2"/>Export CSV</Button>
+            <Button className="rounded-2xl" onClick={handleResetFilters}>
+              <FilterIcon className="h-4 w-4 mr-2" />
+              Reset
+            </Button>
+            <Button className="rounded-2xl" variant="outline" onClick={exportCsv}>
+              <ArrowUpRight className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -537,17 +689,19 @@ export default function Page() {
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <KpiCard icon={<ShieldBan className="h-5 w-5" />} title="Block rate" value={formatPct(kpis.blockRate)} hint="Blocks / total" />
-        <KpiCard icon={<AlertTriangle className="h-5 w-5" />} title="Over‑refusal" value={formatPct(kpis.overRefusalRate)} hint="Overturned / total (proxy)" />
+        <KpiCard icon={<AlertTriangle className="h-5 w-5" />} title="Over-refusal" value={formatPct(kpis.overRefusalRate)} hint="Overturned / total (proxy)" />
         <KpiCard icon={<Scale className="h-5 w-5" />} title="Appeals upheld" value={formatPct(kpis.appealsUpheldRate)} hint="Upheld / appealed" />
         <KpiCard icon={<Timer className="h-5 w-5" />} title="P95 latency" value={`${kpis.p95Latency} ms`} hint="Decision time" />
         <KpiCard icon={<DollarSign className="h-5 w-5" />} title="Avg cost" value={`$${kpis.avgCost.toFixed(2)}`} hint="Per decision" />
-        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title="Worst‑slice gap" value={formatPct(kpis.worstDisparity)} hint="Max block‑rate disparity" />
+        <KpiCard icon={<CheckCircle2 className="h-5 w-5" />} title="Worst-slice gap" value={formatPct(kpis.worstDisparity)} hint="Max block-rate disparity" />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Decision trends</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Decision trends</CardTitle>
+          </CardHeader>
           <CardContent style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={series} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
@@ -564,7 +718,9 @@ export default function Page() {
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">By policy category</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">By policy category</CardTitle>
+          </CardHeader>
           <CardContent style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cats} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
@@ -578,7 +734,9 @@ export default function Page() {
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Decision bands</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Decision bands</CardTitle>
+          </CardHeader>
           <CardContent style={{ height: 260 }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -598,8 +756,10 @@ export default function Page() {
       <Card className="rounded-2xl">
         <CardHeader className="pb-2">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Slice disparity (block‑rate by slice)</CardTitle>
-            <Badge variant={kpis.worstDisparity <= cfg.nsm.worstSliceGapMax ? "default" : "destructive"} className="rounded-xl">Gap: {formatPct(kpis.worstDisparity)}</Badge>
+            <CardTitle className="text-base">Slice disparity (block-rate by slice)</CardTitle>
+            <Badge variant={kpis.worstDisparity <= cfg.nsm.worstSliceGapMax ? "default" : "destructive"} className="rounded-xl">
+              Gap: {formatPct(kpis.worstDisparity)}
+            </Badge>
           </div>
         </CardHeader>
         <CardContent style={{ height: 280 }}>
@@ -618,24 +778,42 @@ export default function Page() {
       {/* Gates & Bands */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Release Gates</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Release Gates</CardTitle>
+          </CardHeader>
           <CardContent className="flex gap-3">
             <GateBadge label="Gate A" pass={gates.A} tip="Quality + Latency" />
-            <GateBadge label="Gate B" pass={gates.B} tip="Appeals + Over‑refusal" />
+            <GateBadge label="Gate B" pass={gates.B} tip="Appeals + Over-refusal" />
             <GateBadge label="Gate C" pass={gates.C} tip="Cost + Volume" />
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Automation Bands (current)</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Automation Bands (current)</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm space-y-2">
-            <div><strong>High risk</strong>: conf ≥ {cfg.bands.high.toFixed(2)} → <Badge className="rounded-xl">block</Badge></div>
-            <div><strong>Medium</strong>: {cfg.bands.medium.toFixed(2)} ≤ conf &lt; {cfg.bands.high.toFixed(2)} → <Badge className="rounded-xl" variant="secondary">suggest</Badge></div>
-            <div><strong>Low</strong>: conf &lt; {cfg.bands.medium.toFixed(2)} → <Badge className="rounded-xl" variant="outline">allow + shadow</Badge></div>
-            <p className="text-muted-foreground">Tune thresholds, then watch over‑refusal and disparity before promotion.</p>
+            <div>
+              <strong>High risk</strong>: conf ≥ {cfg.bands.high.toFixed(2)} → <Badge className="rounded-xl">block</Badge>
+            </div>
+            <div>
+              <strong>Medium</strong>: {cfg.bands.medium.toFixed(2)} ≤ conf &lt; {cfg.bands.high.toFixed(2)} →{" "}
+              <Badge className="rounded-xl" variant="secondary">
+                suggest
+              </Badge>
+            </div>
+            <div>
+              <strong>Low</strong>: conf &lt; {cfg.bands.medium.toFixed(2)} →{" "}
+              <Badge className="rounded-xl" variant="outline">
+                allow + shadow
+              </Badge>
+            </div>
+            <p className="text-muted-foreground">Tune thresholds, then watch over-refusal and disparity before promotion.</p>
           </CardContent>
         </Card>
         <Card className="rounded-2xl">
-          <CardHeader className="pb-2"><CardTitle className="text-base">Policy Notes</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Policy Notes</CardTitle>
+          </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p>Refusals must include: policy category, rationale, lawful alternatives, and an appeal/clarify path.</p>
             <p>Learning is allowed via threshold tuning and disambiguation prompts — not by loosening disallowed content.</p>
@@ -648,8 +826,14 @@ export default function Page() {
         <CardHeader className="pb-2 flex items-center justify-between">
           <CardTitle className="text-base">Recent enforcement records ({filtered.length})</CardTitle>
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="sm" className="rounded-xl"><Search className="h-4 w-4 mr-2"/>Query</Button>
-            <Button size="sm" className="rounded-xl" onClick={exportCsv}><ArrowUpRight className="h-4 w-4 mr-2"/>Export CSV</Button>
+            <Button variant="secondary" size="sm" className="rounded-xl">
+              <Search className="h-4 w-4 mr-2" />
+              Query
+            </Button>
+            <Button size="sm" className="rounded-xl" onClick={exportCsv}>
+              <ArrowUpRight className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto">
@@ -674,7 +858,10 @@ export default function Page() {
                   <td className="py-2 pr-4 whitespace-nowrap">{new Date(r.ts).toLocaleString()}</td>
                   <td className="py-2 pr-4">{r.policy_category}</td>
                   <td className="py-2 pr-4">
-                    <Badge className="rounded-xl" variant={r.decision === "block" ? "destructive" : r.decision === "suggest" ? "secondary" : "outline"}>
+                    <Badge
+                      className="rounded-xl"
+                      variant={r.decision === "block" ? "destructive" : r.decision === "suggest" ? "secondary" : "outline"}
+                    >
                       {r.decision}
                     </Badge>
                   </td>
@@ -683,7 +870,9 @@ export default function Page() {
                   <td className="py-2 pr-4 uppercase">{r.language}</td>
                   <td className="py-2 pr-4">{r.latencyMs} ms</td>
                   <td className="py-2 pr-4">${(r.costCents / 100).toFixed(2)}</td>
-                  <td className="py-2 pr-4 max-w-[380px] truncate" title={r.rationale}>{r.rationale}</td>
+                  <td className="py-2 pr-4 max-w-[380px] truncate" title={r.rationale}>
+                    {r.rationale}
+                  </td>
                   <td className="py-2 pr-4 capitalize">{r.appeal_outcome}</td>
                 </tr>
               ))}
@@ -693,16 +882,27 @@ export default function Page() {
       </Card>
 
       <footer className="text-xs text-muted-foreground">
-        * Demo data. Over‑refusal measured as overturned/total here for illustration; adapt to your appeals model. Config persists to browser. Optional preset via <code>?config=https://…/config.json</code>.
+        * Demo data. Over-refusal measured as overturned/total here for illustration; adapt to your appeals model. Config persists to browser. Optional preset via
+        <code> ?config=https://…/config.json</code>.
       </footer>
     </div>
   );
 }
 
-// ------------------------------------------------------------
-// Small UI helpers
-// ------------------------------------------------------------
-function KpiCard({ icon, title, value, hint }: { icon: React.ReactNode; title: string; value: string; hint?: string }) {
+/* =========================
+   Small UI helpers
+   ========================= */
+function KpiCard({
+  icon,
+  title,
+  value,
+  hint,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string;
+  hint?: string;
+}) {
   return (
     <Card className="rounded-2xl">
       <CardContent className="p-4">
@@ -724,7 +924,11 @@ function GateBadge({ label, pass, tip }: { label: string; pass: boolean; tip?: s
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium ${pass ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"}`}>
+          <div
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium ${
+              pass ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800"
+            }`}
+          >
             <span>{label}</span>
             {pass ? <CheckCircle2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
           </div>
