@@ -228,4 +228,4 @@ npx shadcn@latest add card button badge input label select slider tooltip sheet
 
 ---
 
-Want me to also drop a couple **starter presets** (`balanced.json`, `strict.json`) and an empty `model-evals/data/.keep` file so the folders exist in git?
+
